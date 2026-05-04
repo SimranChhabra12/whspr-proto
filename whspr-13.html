@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WHSPR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400;1,9..40,500&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+@keyframes wdot{0%,100%{opacity:.2}50%{opacity:1}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'DM Sans',-apple-system,'Helvetica Neue',Arial,sans-serif}
+body{background:#07060e;display:flex;justify-content:center;align-items:center;min-height:100vh}
+::-webkit-scrollbar{display:none}
+.shell{width:390px;height:844px;background:#0e0d13;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.8);border-radius:40px}
+.shimmer{background:linear-gradient(90deg,#1a1a24 25%,#262533 50%,#1a1a24 75%);background-size:400px 100%;animation:shimmer 1.4s ease-in-out infinite;border-radius:6px}
+@media(max-width:430px){body{background:#0e0d13;align-items:flex-start}.shell{width:100vw;height:100vh;border-radius:0;box-shadow:none}}
+@keyframes fadeInUp{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="data.js"></script>
+<script type="text/babel">
+const {useState,useEffect,useRef} = React;
+
+const GOOGLE_KEY = "AIzaSyDb8U2z96Ll8bhPCmkS-S5_tW7pPHcwzf8";
+
+// Fuzzy match against seed places — always works, zero latency
+function searchLocal(query) {
+  const q = query.toLowerCase().trim();
+  return PLACES.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    p.neighbourhood.toLowerCase().includes(q) ||
+    p.type.toLowerCase().includes(q) ||
+    p.address.toLowerCase().includes(q)
+  ).map(p => ({
+    id: p.id,
+    name: p.name,
+    placeName: p.address,
+    neighbourhood: p.neighbourhood,
+    coordinates: p.coordinates,
+    _isLocal: true,
+  }));
+}
+
+// Google Places (New) v1 autocomplete — NYC biased
+async function doSearch(query) {
+  if (!query || query.length < 2) return [];
+  const local = searchLocal(query);
+
+  try {
+    const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_KEY,
+      },
+      body: JSON.stringify({
+        input: query,
+        includedPrimaryTypes: ["bar","restaurant","night_club","cafe"],
+        locationBias: {
+          circle: { center: { latitude: 40.7128, longitude: -74.0060 }, radius: 50000 }
+        },
+      }),
+    });
+    const data = await res.json();
+    const suggestions = (data.suggestions || []).map(s => s.placePrediction).filter(Boolean);
+
+    const remote = suggestions.slice(0,6).map(s => ({
+      id: s.placeId,
+      name: s.structuredFormat?.mainText?.text || s.text?.text || "Unknown",
+      placeName: s.structuredFormat?.secondaryText?.text || s.text?.text || "",
+      neighbourhood: (s.structuredFormat?.secondaryText?.text || "").split(",")[0] || "New York",
+      coordinates: null,
+      _isLocal: false,
+    }));
+
+    const localNames = new Set(local.map(r=>r.name.toLowerCase()));
+    const newRemote = remote.filter(r=>!localNames.has(r.name.toLowerCase()));
+    return [...local, ...newRemote];
+  } catch(e) {
+    console.error("Google Places search failed:", e);
+    return local;
+  }
+}
+
+function resolvePlace(mb) {
+  const seed = PLACE_MAP[mb.name.toLowerCase()];
+  if (seed) return seed;
+  return {
+    id:mb.id, name:mb.name, neighbourhood:mb.neighbourhood, type:"Venue",
+    address:mb.placeName, hours:"See Google Maps for hours",
+    coordinates:mb.coordinates, tags:[], transit:null,
+    observations:{ day:[], night:[] },
+    areaActivity:[],
+  };
+}
+
+
+// ── STATIC SUMMARIES — instant, no API latency ───────────────────────────────
+
+function getSummary(name, tags, mode) {
+  const key = name.toLowerCase().replace(/[^a-z]/g,"")+"|"+mode;
+  return Promise.resolve(SUMMARIES[key] || "A NYC venue with its own character — tap observations to learn more.");
+}
+
+// ── SHARED STYLES ─────────────────────────────────────────────────────────────
+const S = {
+  // purple-tinted dark palette — pixel-sampled from Figma
+  black:"#0e0d13",   // shell bg
+  white:"#ffffff",
+  g1:"#1a1a24",      // cards / surfaces
+  g2:"#262533",      // inputs / elevated
+  g3:"#666666",      // muted text
+  g4:"#999999",      // secondary text
+  border:"#2a2939",  // dividers / borders
+  nav:"#1a1a24",     // bottom nav bg
+  accent:"#F5A623",  // Signal Amber
+  accentDim:"#2e1f08", // amber badge bg
+  accentDimText:"#F5A623",
+  serif:"'DM Serif Display', Georgia, serif",
+  sans:"'DM Sans', -apple-system, 'Helvetica Neue', Arial, sans-serif",
+};
+
+// ── ATOMS ─────────────────────────────────────────────────────────────────────
+const Dots = () => (
+  <span style={{display:"inline-flex",gap:3,alignItems:"center"}}>
+    {[0,1,2].map(i=><span key={i} style={{width:4,height:4,borderRadius:"50%",background:S.g3,display:"inline-block",animation:"wdot 1.2s ease-in-out infinite",animationDelay:`${i*0.3}s`}}/>)}
+  </span>
+);
+
+const Pill = ({label}) => (
+  <span style={{padding:"4px 10px",borderRadius:100,border:`1px solid ${S.border}`,fontSize:11,color:S.g4,fontWeight:500,whiteSpace:"nowrap",display:"inline-block"}}>{label}</span>
+);
+
+const ShimmerBlock = ({h=14,w="100%",mb=8}) => (
+  <div className="shimmer" style={{height:h,width:w,borderRadius:6,marginBottom:mb}}/>
+);
+
+// ── BOTTOM NAV ────────────────────────────────────────────────────────────────
+const BottomNav = ({active,onNav}) => {
+  const tabs = [
+    {id:"home",label:"Search",path:"M21 21l-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"},
+    {id:"contribute",label:"Create",path:"M12 5v14M5 12h14"},
+    {id:"saved",label:"Saved",path:"M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"},
+    {id:"profile",label:"Profile",path:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"},
+  ];
+  return (
+    <div style={{height:64,borderTop:`1px solid ${S.border}`,display:"flex",alignItems:"center",justifyContent:"space-around",background:S.nav,flexShrink:0}}>
+      {tabs.map(({id,label,path})=>(
+        <button key={id} onClick={()=>onNav(id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,border:"none",background:"none",cursor:"pointer",color:active===id?S.accent:S.g3,fontSize:10,fontWeight:600,letterSpacing:"0.03em",fontFamily:S.sans,padding:"6px 14px",transition:"color 0.15s"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={path}/></svg>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// ── SEARCH INPUT ──────────────────────────────────────────────────────────────
+const SearchInput = ({value,onChange,onSelect,onSearch,placeholder}) => {
+  const [sugs,setSugs] = useState([]);
+  const [loading,setLoading] = useState(false);
+  const db = useRef(null);
+
+  useEffect(()=>{
+    if(db.current) clearTimeout(db.current);
+    if(!value||value.length<2){ setSugs([]); setLoading(false); return; }
+
+    // Instant local results — no waiting
+    const local = searchLocal(value);
+    setSugs(local);
+    setLoading(local.length === 0); // only show loading if nothing local
+
+    // Debounced Mapbox top-up
+    db.current = setTimeout(async()=>{
+      setLoading(true);
+      try {
+        const all = await doSearch(value);
+        setSugs(all);
+      } catch(e){ /* ignore, local results already shown */ }
+      setLoading(false);
+    }, 500);
+    return ()=>clearTimeout(db.current);
+  },[value]);
+
+  const pick = s => {
+    setSugs([]);
+    setLoading(false);
+    onSelect(s);
+  };
+
+  // Show dropdown whenever there's something to show
+  const showDrop = value.length >= 2 && (loading || sugs.length > 0);
+
+  return (
+    <div style={{position:"relative"}}>
+      <svg style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:S.g3,pointerEvents:"none",zIndex:1}} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input
+        value={value}
+        onChange={e=>onChange(e.target.value)}
+        onKeyDown={e=>{ if(e.key==="Enter" && value.trim() && onSearch) { setSugs([]); onSearch(); }}}
+        placeholder={placeholder||"Search a bar, restaurant, area…"}
+        autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+        style={{width:"100%",height:44,border:`1px solid ${S.border}`,borderRadius:10,padding:"0 14px 0 38px",fontFamily:S.sans,fontSize:15,color:S.white,background:S.g2,outline:"none"}}
+      />
+      {showDrop&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:S.g1,border:`1px solid ${S.border}`,borderRadius:12,zIndex:99999,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",overflow:"hidden"}}>
+          {sugs.map((s,i)=>(
+            <div key={s.id}
+              onPointerDown={e=>{e.preventDefault();pick(s);}}
+              style={{padding:"13px 16px",cursor:"pointer",borderBottom:i<sugs.length-1?`1px solid ${S.border}`:"none",userSelect:"none",background:S.g1}}
+              onMouseEnter={e=>e.currentTarget.style.background=S.g2}
+              onMouseLeave={e=>e.currentTarget.style.background=S.g1}>
+              <div style={{fontSize:14,fontWeight:600,color:S.white}}>{s.name}</div>
+              <div style={{fontSize:12,color:S.g3,marginTop:2}}>{s.neighbourhood}</div>
+            </div>
+          ))}
+          {loading&&sugs.length===0&&(
+            <div style={{padding:"14px 16px",fontSize:13,color:S.g3,display:"flex",gap:8,alignItems:"center"}}>
+              <Dots/><span>Searching…</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── HOME ──────────────────────────────────────────────────────────────────────
+const Home = ({onSelect, onSearch}) => {
+  const [q,setQ] = useState("");
+  const [summaries,setSummaries] = useState({});
+
+  useEffect(()=>{
+    let alive=true;
+    Promise.all(PLACES.map(p=>{
+      const tags=[...new Set(p.observations.day.concat(p.observations.night).flatMap(o=>o.tags))];
+      return getSummary(p.name,tags,"overall").then(t=>{if(alive&&t)setSummaries(s=>({...s,[p.id]:t}));});
+    }));
+    return()=>{alive=false;};
+  },[]);
+
+  // Simple heuristic: show "Active tonight" badge on ~half the venues
+  const isActive = (p) => (p.id.charCodeAt(0) % 2 === 0);
+
+  // Deterministic thumbnail color from name
+  const thumbColor = (name) => {
+    const palette = ["#3a2d4a","#2d3a4a","#4a3a2d","#2d4a3a","#4a2d3a","#3a4a2d","#5c3a4a","#3a5c4a"];
+    let h = 0; for (let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) >>> 0;
+    return palette[h % palette.length];
+  };
+  const Thumb = ({name}) => (
+    <div style={{width:48,height:48,borderRadius:10,background:thumbColor(name),flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,fontFamily:S.serif,fontSize:18,color:S.white,letterSpacing:"-0.02em"}}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+
+  return (
+    <div style={{flex:1,overflowY:"auto",background:S.black}}>
+      {/* Top bar */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"52px 20px 14px",borderBottom:`1px solid ${S.border}`}}>
+        <div style={{fontFamily:S.serif,fontSize:20,letterSpacing:"0.12em",color:S.white}}>whspr</div>
+        <div style={{fontSize:13,color:S.g3,fontWeight:500}}>Sign In</div>
+      </div>
+
+      {/* Hero card */}
+      <div style={{margin:"0 16px 20px",background:S.g1,borderRadius:16,padding:"20px 16px"}}>
+        <div style={{fontFamily:S.serif,fontSize:24,color:S.white,lineHeight:1.15,marginBottom:8}}>The city through her eyes</div>
+        <div style={{fontSize:12,color:S.g3,marginBottom:14,lineHeight:1.5}}>Crowdsourced signals about safety, vibe, and access from real women from across NYC</div>
+        <SearchInput value={q} onChange={setQ} onSelect={f=>{setQ("");onSelect(resolvePlace(f));}} onSearch={()=>onSearch(q)} placeholder="Search a place, block or neighbourhood"/>
+        <button
+          onClick={()=>onSearch(q)}
+          style={{width:"100%",height:38,marginTop:10,background:S.accent,border:"none",borderRadius:8,fontFamily:S.sans,fontSize:14,fontWeight:700,color:"#000",cursor:"pointer",letterSpacing:"0.02em"}}>
+          Search
+        </button>
+      </div>
+
+      {/* Recently active label */}
+      <div style={{padding:"0 20px 10px",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:S.g3}}>Recently Active</div>
+
+      {/* Venue cards */}
+      <div style={{padding:"0 16px"}}>
+        {PLACES.map(p=>(
+          <div key={p.id} onClick={()=>onSelect(p)}
+            style={{background:S.g1,borderRadius:12,padding:"14px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"flex-start",transition:"background 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=S.g2}
+            onMouseLeave={e=>e.currentTarget.style.background=S.g1}>
+            <Thumb name={p.name}/>
+            <div style={{flex:1,paddingRight:10}}>
+              <div style={{fontSize:15,fontWeight:700,marginBottom:3,color:S.white}}>{p.name}</div>
+              <div style={{fontSize:12,color:S.g3}}>{p.address?p.address.split(",")[0]:""} · {p.neighbourhood}</div>
+            </div>
+            <svg style={{color:S.g3,flexShrink:0,marginTop:2}} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+        ))}
+      </div>
+      <div style={{height:28}}/>
+    </div>
+  );
+};
+
+// ── SEARCH RESULTS ────────────────────────────────────────────────────────────
+const FILTER_GROUPS = [
+  {label:"Place Type", options:["Bars","Restaurants","Clubs","Cafes"]},
+  {label:"Time", options:["Open Now","Late Night (After Midnight)"]},
+  {label:"Signals", options:["10+ Signals","20+ Signals","Most Recently Added"]},
+  {label:"Vibe", options:["Solo Friendly","Date Night","Group Friendly"]},
+  {label:"Safety", options:["Well Lit Area","Easy Subway Transit","Spots Open Late Nearby"]},
+];
+
+// Parse "bars in lower east side" → {typeHint:"bars", locationHint:"lower east side"}
+function parseSearchQuery(raw) {
+  const m = raw.match(/^(.+?)\s+(?:in|near|around|at)\s+(.+)$/i);
+  if (m) return { typeHint: m[1].trim().toLowerCase(), locationHint: m[2].trim().toLowerCase() };
+  return { typeHint: null, locationHint: null };
+}
+
+function filterByType(p, hint) {
+  return p.name.toLowerCase().includes(hint) ||
+    p.type.toLowerCase().includes(hint) ||
+    (p.tags||[]).some(t => t.toLowerCase().includes(hint));
+}
+
+function filterByLocation(p, hint) {
+  return p.neighbourhood.toLowerCase().includes(hint) ||
+    (p.address||"").toLowerCase().includes(hint);
+}
+
+const thumbColorOf = (name) => {
+  const palette = ["#3a2d4a","#2d3a4a","#4a3a2d","#2d4a3a","#4a2d3a","#3a4a2d","#5c3a4a","#3a5c4a"];
+  let h = 0; for (let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+};
+
+const SearchResults = ({onBack, onSelect, initialQuery=""}) => {
+  const [q,setQ] = useState(initialQuery);
+  const [filtersOpen,setFiltersOpen] = useState(false);
+  const [activeFilters,setActiveFilters] = useState([]);
+  const [draftFilters,setDraftFilters] = useState([]);
+
+  const results = (() => {
+    const raw = q.trim().toLowerCase();
+    let filtered = PLACES;
+
+    if (raw) {
+      const { typeHint, locationHint } = parseSearchQuery(raw);
+      if (typeHint && locationHint) {
+        filtered = filtered.filter(p => filterByType(p, typeHint) && filterByLocation(p, locationHint));
+      } else {
+        filtered = filtered.filter(p =>
+          p.name.toLowerCase().includes(raw) ||
+          p.neighbourhood.toLowerCase().includes(raw) ||
+          p.type.toLowerCase().includes(raw) ||
+          (p.tags||[]).some(t => t.toLowerCase().includes(raw))
+        );
+      }
+    }
+
+    if (activeFilters.length) {
+      filtered = filtered.filter(p => activeFilters.every(f => {
+        if (f === "Bars") return filterByType(p, "bar");
+        if (f === "Restaurants") return filterByType(p, "restaurant");
+        if (f === "Clubs") return filterByType(p, "club");
+        if (f === "Cafes") return filterByType(p, "cafe");
+        if (f === "Late Night (After Midnight)") return /[234] am/i.test(p.hours||"");
+        if (f === "Solo Friendly") return (p.tags||[]).some(t=>/solo/i.test(t));
+        return true;
+      }));
+    }
+
+    return filtered;
+  })();
+
+  const toggleDraft = f => setDraftFilters(p=>p.includes(f)?p.filter(x=>x!==f):[...p,f]);
+  const openFilters = () => { setDraftFilters(activeFilters); setFiltersOpen(true); };
+  const applyFilters = () => { setActiveFilters(draftFilters); setFiltersOpen(false); };
+
+  const isActive = (p) => (p.id.charCodeAt(0) % 2 === 0);
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:S.black,position:"relative"}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"52px 20px 14px",borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:S.white,padding:0}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div style={{fontFamily:S.serif,fontSize:18,letterSpacing:"0.08em",color:S.white}}>whspr</div>
+        <div style={{fontSize:13,color:S.g3,fontWeight:500}}>Sign In</div>
+      </div>
+
+      {/* Search bar */}
+      <div style={{padding:"0 16px 12px",flexShrink:0}}>
+        <div style={{position:"relative"}}>
+          <svg style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:S.g3,zIndex:1}} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="bars in lower east side"
+            style={{width:"100%",height:46,border:`1px solid ${S.border}`,borderRadius:100,padding:"0 16px 0 42px",fontFamily:S.sans,fontSize:14,color:S.white,background:S.g2,outline:"none",boxSizing:"border-box"}}/>
+        </div>
+      </div>
+
+      {/* Results count + Filters button */}
+      <div style={{padding:"2px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:S.g3}}>
+          {results.length} Results{q?` for '${q}'`:""}
+        </div>
+        <button onClick={openFilters} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",color:activeFilters.length?S.accent:S.g3,fontFamily:S.sans,fontSize:12,fontWeight:600,padding:0}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filters{activeFilters.length?` (${activeFilters.length})`:""}
+        </button>
+      </div>
+
+      {/* Results list */}
+      <div style={{flex:1,overflowY:"auto",padding:"0 16px 20px"}}>
+        {results.map(p=>(
+          <div key={p.id} onClick={()=>onSelect(p)}
+            style={{background:S.g1,borderRadius:12,padding:"12px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:48,height:48,borderRadius:10,background:thumbColorOf(p.name),flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:S.serif,fontSize:18,color:S.white}}>{p.name.charAt(0).toUpperCase()}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:700,color:S.white,marginBottom:2}}>{p.name}</div>
+              <div style={{fontSize:11,color:S.g3,marginBottom:6}}>{p.address?p.address.split(",")[0]:""} · {p.neighbourhood}</div>
+              {isActive(p) && (
+                <div style={{display:"inline-flex",alignItems:"center",gap:5,background:S.accentDim,borderRadius:5,padding:"2px 7px"}}>
+                  <div style={{width:5,height:5,borderRadius:"50%",background:S.accent}}/>
+                  <span style={{fontSize:9,fontWeight:700,color:S.accent}}>Active tonight</span>
+                </div>
+              )}
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={S.g3} strokeWidth="2"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={S.g3} strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+        ))}
+        {results.length===0 && (
+          <div style={{textAlign:"center",padding:"40px 20px",color:S.g3,fontSize:13}}>No matches. Try a different search.</div>
+        )}
+      </div>
+
+      {/* Filters bottom sheet */}
+      {filtersOpen && (
+        <div onClick={()=>setFiltersOpen(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,display:"flex",alignItems:"flex-end"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:S.g1,borderTopLeftRadius:20,borderTopRightRadius:20,padding:"20px 20px 28px",maxHeight:"80%",overflowY:"auto",borderTop:`1px solid ${S.border}`}}>
+            {/* Sheet header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:700,color:S.white}}>Filters{draftFilters.length?` (${draftFilters.length})`:""}</div>
+                <div style={{fontSize:12,color:S.g3,marginTop:2}}>{results.length} Search Results</div>
+              </div>
+              <button onClick={()=>setFiltersOpen(false)} style={{background:"none",border:"none",cursor:"pointer",color:S.g3,padding:4,marginTop:2}}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            {/* Filter groups */}
+            {FILTER_GROUPS.map(g=>(
+              <div key={g.label} style={{marginTop:18}}>
+                <div style={{fontSize:13,fontWeight:600,color:S.white,marginBottom:10}}>{g.label}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {g.options.map(o=>{
+                    const sel = draftFilters.includes(o);
+                    return (
+                      <button key={o} onClick={()=>toggleDraft(o)} style={{padding:"7px 16px",borderRadius:100,border:`1px solid ${sel?S.accent:S.border}`,background:sel?S.accentDim:"transparent",color:sel?S.accent:S.g4,fontFamily:S.sans,fontSize:13,fontWeight:500,cursor:"pointer"}}>{o}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {/* Show Results */}
+            <button onClick={applyFilters} style={{width:"100%",height:50,marginTop:24,background:draftFilters.length?S.accent:S.g2,color:draftFilters.length?"#000":S.g3,border:"none",borderRadius:12,fontFamily:S.sans,fontSize:15,fontWeight:700,cursor:draftFilters.length?"pointer":"default"}}>
+              Show Results
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Build transit list with miles from existing seed transit shape
+function transitLines(place) {
+  if (!place.transit) return [];
+  // Generate one or two lines based on existing transit name. Distance is deterministic from id hash for prototype.
+  let h = 0; const id = place.id||place.name||"x";
+  for (let i=0;i<id.length;i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  const d1 = (0.1 + (h%6)*0.1).toFixed(1);
+  return [{label: place.transit.name, miles: d1+" miles"}];
+}
+
+// Build areaInfo if not present. Falls back to neighborhood lookup so the original
+// hand-written seeds use the same Nearby/Street/Rideshare pattern as the expansion.
+function ensureAreaInfo(place) {
+  if (place.areaInfo) return place.areaInfo;
+  const neighKey = (place.neighbourhood||"").split(",")[0].trim();
+  const fromNeigh = (typeof NEIGH_AREA !== "undefined") ? NEIGH_AREA[neighKey] : null;
+  if (fromNeigh) {
+    return {
+      nearbyOpen: fromNeigh.nearby,
+      streetConditions: fromNeigh.street,
+      rideshare: { wait: "3–5 min", spot: fromNeigh.spot },
+    };
+  }
+  return {
+    nearbyOpen: [],
+    streetConditions: "Streets typically active in the evening; calmer late.",
+    rideshare: { wait: "3–5 min", spot: "Nearest cross street" }
+  };
+}
+
+// ── PROFILE ───────────────────────────────────────────────────────────────────
+const Profile = ({place, userReviews=[], initialMode=null, onBack, onAddThoughts, isSaved, onToggleSave}) => {
+  const [mode,setMode] = useState(initialMode||"night");
+  const [areaOpen,setAreaOpen] = useState(false);
+  const [showAllSignals,setShowAllSignals] = useState(false);
+
+  const seedObs = place.observations ? (place.observations[mode]||[]) : [];
+  const obs = [...userReviews.filter(r => !r.dayPart || (mode==="night" ? r.dayPart==="Night" : r.dayPart==="Day")), ...seedObs];
+  const totalSignals = (place.observations?.day?.length||0) + (place.observations?.night?.length||0) + userReviews.length;
+  const visibleObs = showAllSignals ? obs : obs.slice(0,3);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name+" "+(place.address||""))}`;
+  const transit = transitLines(place);
+  const areaInfo = ensureAreaInfo(place);
+  const hasSignals = obs.length > 0;
+
+  return (
+    <div style={{flex:1,overflowY:"auto",background:S.black}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"52px 20px 14px",borderBottom:`1px solid ${S.border}`}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:S.white,display:"flex",alignItems:"center",gap:4,fontSize:14,fontFamily:S.serif,padding:0}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>Back
+        </button>
+        <div style={{fontFamily:S.serif,fontSize:18,letterSpacing:"0.08em",color:S.white}}>whspr</div>
+        <button onClick={onToggleSave} style={{background:"none",border:"none",cursor:"pointer",padding:4,color:isSaved?S.accent:S.g3}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill={isSaved?S.accent:"none"} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+        </button>
+      </div>
+
+      <div style={{padding:"20px 20px 0"}}>
+        {/* Name */}
+        <div style={{fontSize:26,fontWeight:800,letterSpacing:"-0.5px",marginBottom:5,textTransform:"uppercase",color:S.white}}>{place.name}</div>
+        <div style={{fontSize:13,color:S.g3,marginBottom:12}}>{place.type} · {place.address} · {place.hours}</div>
+
+        {/* Tags + signal count */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+          {(place.tags||[]).map(t=><Pill key={t} label={t}/>)}
+          {hasSignals && (
+            <span style={{padding:"4px 10px",borderRadius:100,background:S.accentDim,color:S.accent,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{totalSignals} Women's Signals</span>
+          )}
+        </div>
+
+        {/* Day/Night toggle (only if signals present) */}
+        {hasSignals && (
+          <div style={{display:"flex",gap:3,background:S.g1,borderRadius:8,padding:3,marginBottom:20}}>
+            {["day","night"].map(m=>(
+              <button key={m} onClick={()=>setMode(m)} style={{flex:1,height:34,border:"none",borderRadius:6,fontFamily:S.sans,fontSize:12,fontWeight:700,textTransform:"capitalize",cursor:"pointer",background:mode===m?S.accent:"transparent",color:mode===m?"#000":S.g3,transition:"all 0.15s"}}>
+                {m==="day"?"☀ Day":"🌙 Night"}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Signals (or empty state) */}
+      <div style={{padding:"0 20px 20px"}}>
+        {hasSignals ? (
+          <>
+            <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:S.white}}>Recent Thoughts</div>
+            {visibleObs.map((o,i)=>(
+              <div key={i} style={{display:"flex",gap:10,marginBottom:16,alignItems:"flex-start"}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:o.isUser?S.accent:S.g2,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:o.isUser?"#000":S.g4}}>
+                  {o.isUser ? "You" : String.fromCharCode(65+((place.id.charCodeAt(0)+i)%26))}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,color:S.white,lineHeight:1.6,marginBottom:5}}>{o.text}</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {(o.tags||[]).map(t=><span key={t} style={{fontSize:10,color:S.g3,background:S.g2,padding:"3px 8px",borderRadius:4,fontWeight:500}}>{t}</span>)}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {obs.length>3 && !showAllSignals && (
+              <button onClick={()=>setShowAllSignals(true)} style={{border:"none",background:"none",fontSize:13,color:S.accent,cursor:"pointer",fontFamily:S.sans,fontWeight:600,padding:"2px 0"}}>See more thoughts</button>
+            )}
+          </>
+        ) : (
+          <div style={{padding:"30px 8px",textAlign:"center"}}>
+            <div style={{fontFamily:S.serif,fontSize:20,color:S.white,lineHeight:1.3,marginBottom:18}}>No signals yet.<br/>Be the first to share.</div>
+            <button onClick={onAddThoughts} style={{width:"100%",height:48,background:S.accent,color:"#000",border:"none",borderRadius:10,fontFamily:S.sans,fontSize:14,fontWeight:700,cursor:"pointer"}}>Add Your Thoughts!</button>
+          </div>
+        )}
+      </div>
+
+      {/* Getting There — distance based */}
+      {transit.length>0 && (
+        <div style={{padding:"0 20px 20px"}}>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:12,color:S.white}}>Getting There & Back</div>
+          <div style={{border:`1px solid ${S.border}`,borderRadius:12,background:S.g1,overflow:"hidden"}}>
+            {transit.map((t,i)=>(
+              <div key={i} style={{padding:"13px 16px",borderBottom:i<transit.length-1?`1px solid ${S.border}`:"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:14,color:S.white,fontWeight:500}}>{t.label}</div>
+                <div style={{fontSize:13,color:S.g3}}>· {t.miles}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Navigate */}
+      <div style={{padding:"0 20px 20px"}}>
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,height:46,border:`1px solid ${S.border}`,borderRadius:10,fontFamily:S.sans,fontSize:13,fontWeight:600,color:S.white,textDecoration:"none",background:S.g1}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+          Help me navigate
+        </a>
+      </div>
+
+      {/* Been here already CTA — only when signals present (empty state already has CTA) */}
+      {hasSignals && (
+        <div style={{padding:"0 20px 20px",textAlign:"center"}}>
+          <div style={{fontSize:13,color:S.g4,fontStyle:"italic",marginBottom:10}}>Been here already?</div>
+          <button onClick={onAddThoughts} style={{width:"100%",height:46,background:S.accent,color:"#000",border:"none",borderRadius:10,fontFamily:S.sans,fontSize:14,fontWeight:700,cursor:"pointer"}}>Add Your Thoughts!</button>
+        </div>
+      )}
+
+      {/* Area Info — expandable */}
+      <div style={{margin:"0 20px 36px",border:`1px solid ${S.border}`,borderRadius:12,overflow:"hidden",background:S.g1}}>
+        <button onClick={()=>setAreaOpen(o=>!o)} style={{width:"100%",background:S.g1,padding:"14px 16px",fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:S.g3,border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",fontFamily:S.sans}}>
+          <span>Area Info</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{transform:areaOpen?"rotate(180deg)":"none",transition:"transform 0.2s"}}><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        {areaOpen && (
+          <div style={{borderTop:`1px solid ${S.border}`,padding:"14px 16px",fontSize:13,color:S.g4,lineHeight:1.6}}>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:11,fontWeight:700,color:S.white,marginBottom:6,letterSpacing:"0.04em"}}>Nearby Open Now:</div>
+              {(areaInfo.nearbyOpen||[]).map((n,i)=>(
+                <div key={i} style={{paddingLeft:0,marginBottom:3}}>{n.name}{n.note?` – ${n.note}`:""}</div>
+              ))}
+            </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:11,fontWeight:700,color:S.white,marginBottom:6,letterSpacing:"0.04em"}}>Street Conditions:</div>
+              <div>{typeof areaInfo.streetConditions==="string"?areaInfo.streetConditions:(areaInfo.streetConditions||[]).join(" ")}</div>
+            </div>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:S.white,marginBottom:6,letterSpacing:"0.04em"}}>Cabs / Ride-sharing:</div>
+              <div>Avg Pickup Wait: {areaInfo.rideshare?.wait||"3–5 min"}</div>
+              <div>Common Pickup Spot: {areaInfo.rideshare?.spot||"Nearest cross street"}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── CONTRIBUTE ────────────────────────────────────────────────────────────────
+const Contribute = ({onDone, initialPlace}) => {
+  const [placeQ,setPlaceQ] = useState("");
+  const [chosen,setChosen] = useState(initialPlace||null);
+  const [been,setBeen] = useState(null);
+  const [dayPart,setDayPart] = useState(null);
+  const [when,setWhen] = useState(null);
+  const [tags,setTags] = useState([]);
+  const [visitType,setVisitType] = useState(null);
+  const [text,setText] = useState("");
+  const [listening,setListening] = useState(false);
+  const recogRef = useRef(null);
+
+  const BEEN_OPTIONS = ["No, first time","Yes, once or twice","I come here often"];
+  const WHENS = ["Weekday","Fri–Sat","Sunday"];
+  const TAGS = [["Vibe / Atmosphere","Noise / Crowd"],["Safety / Comfort","Getting there / home"]];
+  const VISIT_TYPES = ["Solo","Group","Couple"];
+  const toggleTag = t => setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+  const valid = chosen && been && dayPart && when && tags.length>0 && visitType && text.trim().length>=10;
+
+  const Chip = ({label,sel,onClick}) => (
+    <button onClick={onClick} style={{padding:"8px 14px",borderRadius:100,border:`1px solid ${sel?S.accent:S.border}`,background:sel?S.accentDim:"transparent",color:sel?S.accent:S.g4,fontFamily:S.sans,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{label}</button>
+  );
+  const SectionLabel = ({children}) => (
+    <div style={{fontSize:11,fontWeight:700,color:S.g3,marginBottom:10,marginTop:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>{children}</div>
+  );
+
+  const SR = (typeof window!=="undefined") && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const startMic = () => {
+    if (!SR) return;
+    if (listening) { recogRef.current?.stop(); return; }
+    const r = new SR();
+    r.continuous = false; r.interimResults = false; r.lang = "en-US";
+    r.onresult = (ev) => {
+      const transcript = Array.from(ev.results).map(x=>x[0].transcript).join(" ");
+      setText(prev => (prev + (prev?" ":"") + transcript).slice(0,280));
+    };
+    r.onend = () => setListening(false);
+    r.onerror = () => setListening(false);
+    recogRef.current = r;
+    setListening(true);
+    try { r.start(); } catch { setListening(false); }
+  };
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:S.black}}>
+      {/* Top bar */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"52px 20px 14px",borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+        <button onClick={()=>onDone("cancel")} style={{background:"none",border:"none",cursor:"pointer",fontSize:14,color:S.g3,fontFamily:S.serif}}>Cancel</button>
+        <div style={{fontSize:14,fontFamily:S.serif,color:S.white}}>Add Your Thoughts</div>
+        <div style={{width:50}}/>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"20px 20px 28px"}}>
+        {/* Place selector */}
+        <SectionLabel>Place</SectionLabel>
+        <div style={{marginBottom:22}}>
+          {chosen ? (
+            <div style={{border:`1px solid ${S.accent}`,borderRadius:10,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",background:S.g1}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:S.white}}>{chosen.name}</div>
+                <div style={{fontSize:12,color:S.g3,marginTop:2}}>{chosen.address||chosen.neighbourhood}</div>
+              </div>
+              <button onClick={()=>setChosen(null)} style={{background:"none",border:"none",fontSize:13,color:S.accent,cursor:"pointer",fontFamily:S.sans,fontWeight:600}}>Change ›</button>
+            </div>
+          ) : (
+            <SearchInput value={placeQ} onChange={setPlaceQ} onSelect={f=>{setChosen(resolvePlace(f));setPlaceQ("");}} placeholder="Search a bar, venue, restaurant…"/>
+          )}
+        </div>
+
+        <SectionLabel>Have you been here before?</SectionLabel>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:22}}>
+          {BEEN_OPTIONS.map(v=><Chip key={v} label={v} sel={been===v} onClick={()=>setBeen(v)}/>)}
+        </div>
+
+        <SectionLabel>When were you there?</SectionLabel>
+        <div style={{display:"flex",gap:3,background:S.g1,borderRadius:8,padding:3,marginBottom:10}}>
+          {["Day","Night"].map(m=>(
+            <button key={m} onClick={()=>setDayPart(m)} style={{flex:1,height:34,border:"none",borderRadius:6,fontFamily:S.sans,fontSize:13,fontWeight:700,cursor:"pointer",background:dayPart===m?S.accent:"transparent",color:dayPart===m?"#000":S.g3}}>
+              {m==="Day"?"☀ Day":"🌙 Night"}
+            </button>
+          ))}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:22}}>
+          {WHENS.map(w=><Chip key={w} label={w} sel={when===w} onClick={()=>setWhen(w)}/>)}
+        </div>
+
+        <SectionLabel>Was it a group or solo visit?</SectionLabel>
+        <div style={{display:"flex",gap:8,marginBottom:22}}>
+          {VISIT_TYPES.map(v=><Chip key={v} label={v} sel={visitType===v} onClick={()=>setVisitType(v)}/>)}
+        </div>
+
+        <SectionLabel>What is your observation about?</SectionLabel>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+          {TAGS.map((row,i)=>(
+            <div key={i} style={{display:"flex",gap:8}}>
+              {row.map(t=>(
+                <button key={t} onClick={()=>toggleTag(t)} style={{flex:1,padding:"10px 8px",borderRadius:8,border:`1px solid ${tags.includes(t)?S.accent:S.border}`,background:tags.includes(t)?S.accentDim:"transparent",color:tags.includes(t)?S.accent:S.g4,fontFamily:S.sans,fontSize:12,cursor:"pointer",textAlign:"center"}}>{t}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <SectionLabel>Your Experience</SectionLabel>
+        <div style={{fontSize:12,color:S.g3,marginBottom:10,fontStyle:"italic"}}>Describe how you felt. Specific details help the most.</div>
+        <div style={{position:"relative",marginBottom:6}}>
+          <textarea value={text} onChange={e=>setText(e.target.value.slice(0,280))}
+            placeholder="Eg: Gets loud after 10 pm, easy to get a cab after midnight"
+            style={{width:"100%",height:140,border:`1px solid ${S.border}`,borderRadius:10,padding:"14px 50px 14px 14px",fontFamily:S.sans,fontSize:14,color:S.white,resize:"none",outline:"none",background:S.g1,lineHeight:1.6}}/>
+          {SR && (
+            <button onClick={startMic} title={listening?"Stop":"Speak"} style={{position:"absolute",bottom:12,right:12,width:36,height:36,borderRadius:"50%",border:"none",background:listening?S.accent:S.g2,color:listening?"#000":S.g4,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:listening?`0 0 0 4px ${S.accentDim}`:"none",transition:"all 0.15s"}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3"/></svg>
+            </button>
+          )}
+        </div>
+        <div style={{textAlign:"right",fontSize:12,color:S.g3,marginBottom:24}}>{text.length}/280</div>
+
+        <button disabled={!valid} onClick={()=>onDone({
+            type:"submit",
+            placeId: chosen.id,
+            placeName: chosen.name,
+            text: text.trim(),
+            tags: tags,
+            dayPart: dayPart,
+            when: when,
+          })}
+          style={{width:"100%",height:52,background:valid?S.accent:S.g2,color:valid?"#000":S.g3,border:"none",borderRadius:10,fontFamily:S.sans,fontSize:14,fontWeight:700,cursor:valid?"pointer":"default"}}>
+          Submit Your Experience
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── VERIFICATION ──────────────────────────────────────────────────────────────
+const Verification = ({onBrowse}) => (
+  <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",textAlign:"center",background:S.black}}>
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={S.g3} strokeWidth="1.4" style={{marginBottom:24}}><path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12M7 22v-4.172a2 2 0 0 1 .586-1.414L12 12M7 2v4.172a2 2 0 0 0 .586 1.414L12 12M17 2v4.172a2 2 0 0 1-.586 1.414L12 12"/></svg>
+    <div style={{fontFamily:S.serif,fontSize:26,marginBottom:12,lineHeight:1.2,color:S.white}}>Verification Pending</div>
+    <div style={{fontSize:14,color:S.g4,lineHeight:1.7,marginBottom:32,maxWidth:280,fontWeight:300}}>We've received your ID. You'll get an email once your account is verified — usually 24 hours or less.</div>
+    <div style={{width:"100%",marginBottom:32}}>
+      {["Browse places","Save posts","Add experience — available after verification"].map((item,i)=>(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderTop:i===0?`1px solid ${S.border}`:"none",borderBottom:`1px solid ${S.border}`,fontSize:13,color:S.g4,fontWeight:300,textAlign:"left"}}>
+          <div style={{width:20,height:20,borderRadius:"50%",background:S.g1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={S.g3} strokeWidth="2.5"><polyline points="20 6 9 13 4 10"/></svg>
+          </div>
+          {item}
+        </div>
+      ))}
+    </div>
+    <button onClick={onBrowse} style={{width:"100%",height:50,background:S.accent,color:"#000",border:"none",borderRadius:8,fontFamily:S.sans,fontSize:13,fontWeight:700,letterSpacing:"0.04em",cursor:"pointer"}}>Browse WHSPR</button>
+  </div>
+);
+
+// ── SUBMISSION CONFIRMATION ──────────────────────────────────────────────────
+const SubmissionConfirm = ({placeName, onBack}) => (
+  <div style={{flex:1,display:"flex",flexDirection:"column",background:S.black}}>
+    <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"52px 20px 14px"}}>
+      <div style={{fontFamily:S.serif,fontSize:20,letterSpacing:"0.12em",color:S.white}}>whspr</div>
+    </div>
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",textAlign:"center"}}>
+      <div style={{width:104,height:104,borderRadius:"50%",background:S.accent,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:30,boxShadow:`0 0 0 12px ${S.accentDim}`}}>
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div style={{fontFamily:S.serif,fontSize:30,color:S.white,marginBottom:10}}>Signal Sent!</div>
+      <div style={{fontSize:14,color:S.g4,marginBottom:36}}>Thanks for looking out.</div>
+      <button onClick={onBack} style={{width:"100%",height:50,background:S.accent,color:"#000",border:"none",borderRadius:10,fontFamily:S.sans,fontSize:14,fontWeight:700,cursor:"pointer"}}>Back to {placeName}</button>
+    </div>
+  </div>
+);
+
+// ── SAVED PLACES ─────────────────────────────────────────────────────────────
+const SavedPlaces = ({savedIds, onSelect, onBack, onToggleSave}) => {
+  const saved = savedIds.map(id => PLACE_MAP[id]).filter(Boolean);
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:S.black}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"52px 20px 14px",borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:S.white}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div style={{fontFamily:S.serif,fontSize:18,letterSpacing:"0.08em",color:S.white}}>Saved</div>
+        <div style={{width:20}}/>
+      </div>
+      <div style={{padding:"6px 20px 12px",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:S.g3,flexShrink:0}}>Your Saved Places</div>
+      <div style={{flex:1,overflowY:"auto",padding:"0 16px 24px"}}>
+        {saved.length===0 ? (
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",textAlign:"center",color:S.g3}}>
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={S.g3} strokeWidth="1.5" style={{marginBottom:16}}><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            <div style={{fontSize:14,maxWidth:240,lineHeight:1.5}}>Save places you want to come back to.</div>
+          </div>
+        ) : saved.map(p=>(
+          <div key={p.id} onClick={()=>onSelect(p)} style={{background:S.g1,borderRadius:12,padding:"12px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:48,height:48,borderRadius:10,background:thumbColorOf(p.name),flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:S.serif,fontSize:18,color:S.white}}>{p.name.charAt(0).toUpperCase()}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:700,color:S.white,marginBottom:2}}>{p.name}</div>
+              <div style={{fontSize:11,color:S.g3}}>{p.address?p.address.split(",")[0]:""} · {p.neighbourhood}</div>
+            </div>
+            <button onClick={e=>{e.stopPropagation();onToggleSave(p.id);}} style={{background:"none",border:"none",cursor:"pointer",color:S.accent,padding:4}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={S.accent} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── PROFILE TAB ──────────────────────────────────────────────────────────────
+const ProfileTab = ({contributionCount, onBack}) => {
+  const items = [
+    {label:"Edit Profile", icon:"M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"},
+    {label:"Settings", icon:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"},
+    {label:"Help", icon:"M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"},
+    {label:"Contact Us", icon:"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"},
+    {label:"Log Out", icon:"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"},
+  ];
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:S.black}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"52px 20px 14px",borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:S.white}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div style={{fontFamily:S.serif,fontSize:18,letterSpacing:"0.08em",color:S.white}}>Profile</div>
+        <div style={{width:20}}/>
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 20px 18px"}}>
+          <div style={{width:84,height:84,borderRadius:"50%",background:S.accent,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:S.serif,fontSize:36,color:"#000",marginBottom:14}}>S</div>
+          <div style={{fontSize:13,color:S.g3,marginBottom:4}}>@sc1134</div>
+          <div style={{fontFamily:S.serif,fontSize:22,color:S.white,marginBottom:4}}>Sarah Collins</div>
+          <div style={{fontSize:12,color:S.g3,marginBottom:24}}>Joined May 2026</div>
+          <div style={{fontFamily:S.serif,fontSize:36,color:S.accent}}>{contributionCount}</div>
+          <div style={{fontSize:12,color:S.g3}}>Contributions so far</div>
+        </div>
+        <div style={{padding:"0 20px 30px"}}>
+          {items.map((it,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:14,padding:"16px 4px",borderTop:`1px solid ${S.border}`,borderBottom:i===items.length-1?`1px solid ${S.border}`:"none",cursor:"pointer"}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={S.g4} strokeWidth="1.8"><path d={it.icon}/></svg>
+              <div style={{flex:1,fontSize:14,color:S.white,fontWeight:500}}>{it.label}</div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={S.g3} strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── SPLASH + ONBOARDING ──────────────────────────────────────────────────────
+const Splash = () => (
+  <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:S.black,gap:18}}>
+    <img src="assets/splash-logo.svg" alt="" style={{width:160,height:"auto",display:"block"}}/>
+    <div style={{fontFamily:S.serif,fontSize:48,letterSpacing:"0.04em",color:S.white}}>whspr</div>
+  </div>
+);
+
+const Illo1 = () => <img src="assets/onboarding-1.svg" alt="" style={{width:240,height:"auto",display:"block"}}/>;
+const Illo2 = () => <img src="assets/onboarding-2.svg" alt="" style={{width:240,height:"auto",display:"block"}}/>;
+const Illo3 = () => <img src="assets/onboarding-3.svg" alt="" style={{width:240,height:"auto",display:"block"}}/>;
+
+const Onboarding = ({onDone}) => {
+  const [i,setI] = useState(0);
+  const slides = [
+    {h:"The city through her eyes", s:"Real experiences from real women.", art:<Illo1/>},
+    {h:"Look up any bar, restaurant or club", s:"See what other women thought before you go", art:<Illo2/>},
+    {h:"Been there? Drop a signal", s:"Share your experience in 60 seconds.", art:<Illo3/>},
+  ];
+  const last = i === slides.length - 1;
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",background:S.black,padding:"52px 28px 36px",position:"relative"}}>
+      <div style={{display:"flex",justifyContent:"flex-end",height:24}}>
+        {!last && <button onClick={onDone} style={{background:"none",border:"none",color:S.g4,fontSize:13,cursor:"pointer",fontFamily:S.sans}}>Skip</button>}
+      </div>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
+        <div style={{fontFamily:S.serif,fontSize:28,color:S.white,lineHeight:1.2,marginBottom:14,maxWidth:300}}>{slides[i].h}</div>
+        <div style={{fontSize:14,color:S.g4,fontStyle:"italic",lineHeight:1.5,maxWidth:280,marginBottom:20}}>{slides[i].s}</div>
+        <div>{slides[i].art}</div>
+      </div>
+      <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:24}}>
+        {slides.map((_,j)=>(
+          <div key={j} style={{width:j===i?22:8,height:8,borderRadius:4,background:j===i?S.accent:S.g2,transition:"all 0.2s"}}/>
+        ))}
+      </div>
+      {last ? (
+        <button onClick={onDone} style={{height:52,background:"transparent",color:S.white,border:`1px solid ${S.accent}`,borderRadius:10,fontFamily:S.sans,fontSize:14,fontWeight:700,cursor:"pointer"}}>Get Started</button>
+      ) : (
+        <button onClick={()=>setI(i+1)} style={{height:52,background:"transparent",color:S.white,border:`1px solid ${S.border}`,borderRadius:10,fontFamily:S.sans,fontSize:14,fontWeight:600,cursor:"pointer"}}>Next</button>
+      )}
+    </div>
+  );
+};
+
+// ── ROOT ──────────────────────────────────────────────────────────────────────
+const App = () => {
+  const initialScreen = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("whspr_onboarded")) ? "home" : "splash";
+  const [screen,setScreen] = useState(initialScreen);
+  const [searchQuery,setSearchQuery] = useState("");
+  const [place,setPlace] = useState(null);
+  const [contributePlace,setContributePlace] = useState(null);
+  const [confirmPlaceName,setConfirmPlaceName] = useState("");
+  const [nav,setNav] = useState("home");
+  const [userReviews,setUserReviews] = useState({});
+  const [profileMode,setProfileMode] = useState(null);
+  const [savedPlaces,setSavedPlaces] = useState([]);
+  const toggleSave = id => setSavedPlaces(p => p.includes(id) ? p.filter(x=>x!==id) : [...p, id]);
+  const totalContributions = Object.values(userReviews).reduce((n,arr)=>n+arr.length,0);
+
+  // Splash auto-advance
+  useEffect(()=>{
+    if (screen === "splash") {
+      const t = setTimeout(()=>setScreen("onboarding"), 1500);
+      return ()=>clearTimeout(t);
+    }
+  }, [screen]);
+
+  const finishOnboarding = () => {
+    try { sessionStorage.setItem("whspr_onboarded","1"); } catch {}
+    setScreen("home");
+  };
+
+  const go = id => {
+    if(id==="home"){setScreen("home");setNav("home");setPlace(null);}
+    else if(id==="contribute"){setContributePlace(null);setScreen("contribute");setNav("contribute");}
+    else if(id==="saved"){setScreen("saved");setNav("saved");}
+    else if(id==="profile"){setScreen("profileTab");setNav("profile");}
+    else setNav(id);
+  };
+
+  const handleContributeDone = (result) => {
+    if(result && result.type==="submit") {
+      setUserReviews(prev => ({
+        ...prev,
+        [result.placeId]: [
+          {text: result.text, tags: result.tags.length ? result.tags : ["Atmosphere & Vibe"], dayPart: result.dayPart, isUser: true},
+          ...(prev[result.placeId]||[]),
+        ]
+      }));
+      const submittedPlace = PLACE_MAP[result.placeId] || place;
+      setPlace(submittedPlace);
+      setProfileMode(result.dayPart === "Night" ? "night" : "day");
+      setConfirmPlaceName(submittedPlace?.name || "place");
+      setScreen("submitConfirm");
+      setNav("home");
+    } else if(result==="cancel") {
+      if(place) setScreen("profile");
+      else setScreen("home");
+      setNav("home");
+    }
+  };
+
+  const showNav = !["splash","onboarding"].includes(screen);
+
+  return (
+    <div className="shell">
+      {screen==="splash" && <Splash/>}
+      {screen==="onboarding" && <Onboarding onDone={finishOnboarding}/>}
+      {screen==="home" && <Home onSelect={p=>{setPlace(p);setScreen("profile");setNav("home");}} onSearch={q=>{setSearchQuery(q);setScreen("searchResults");}}/>}
+      {screen==="searchResults" && <SearchResults initialQuery={searchQuery} onBack={()=>{setScreen("home");setNav("home");setSearchQuery("");}} onSelect={p=>{setPlace(p);setScreen("profile");setNav("home");}}/>}
+      {screen==="profile" && place && (
+        <Profile
+          place={place}
+          userReviews={userReviews[place.id]||[]}
+          initialMode={profileMode}
+          onBack={()=>{setScreen("home");setNav("home");setProfileMode(null);}}
+          onAddThoughts={()=>{setContributePlace(place);setScreen("contribute");setNav("contribute");}}
+          isSaved={savedPlaces.includes(place.id)}
+          onToggleSave={()=>toggleSave(place.id)}
+        />
+      )}
+      {screen==="contribute" && <Contribute onDone={handleContributeDone} initialPlace={contributePlace}/>}
+      {screen==="submitConfirm" && (
+        <SubmissionConfirm placeName={confirmPlaceName} onBack={()=>{setScreen("profile");setNav("home");}}/>
+      )}
+      {screen==="saved" && (
+        <SavedPlaces savedIds={savedPlaces} onBack={()=>{setScreen("home");setNav("home");}} onSelect={p=>{setPlace(p);setScreen("profile");setNav("home");}} onToggleSave={toggleSave}/>
+      )}
+      {screen==="profileTab" && (
+        <ProfileTab contributionCount={totalContributions} onBack={()=>{setScreen("home");setNav("home");}}/>
+      )}
+      {showNav && <BottomNav active={nav} onNav={go}/>}
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
