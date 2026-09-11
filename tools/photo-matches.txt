@@ -1,0 +1,110 @@
+OK   Schmuck (1st Ave, Lower East Side) → schmuck. — 97 1st Ave, New York, NY 10003, USA
+OK   Superbueno (183 Eldridge St, Lower East Side) → Superbueno — 13 1st Ave, New York, NY 10003, USA
+OK   Attaboy (134 Eldridge St, Lower East Side) → Attaboy — 134 Eldridge St, New York, NY 10002, USA
+OK   Julius' Bar (159 W 10th St, West Village) → Julius' — 159 W 10th St, New York, NY 10014, USA
+OK   Gage & Tollner (372 Fulton St, Downtown Brooklyn) → Gage & Tollner — 372 Fulton St, Brooklyn, NY 11201, USA
+OK   Saraghina (435 Halsey St, Bed-Stuy) → Saraghina Pizzeria — 350 Lewis Ave, Brooklyn, NY 11233, USA
+OK   Barrio Chino (253 Broome St, Lower East Side) → Barrio Chino — 253 Broome St, New York, NY 10002, USA
+OK   The Ten Bells (247 Broome St, Lower East Side) → The Ten Bells — 247 Broome St, New York, NY 10002, USA
+OK   Mr. Purple (180 Orchard St, Lower East Side) → Mr. Purple — 180 Orchard St 15th floor, New York, NY 10002, USA
+OK   Beauty Bar (231 E 14th St, Lower East Side) → Beauty Bar — 231 E 14th St, New York, NY 10003, USA
+OK   Pig & Khao (68 Clinton St, Lower East Side) → Pig and Khao - LES — 68 Clinton St, New York, NY 10002, USA
+OK   Welcome to the Johnsons (123 Rivington St, Lower East Side) → Welcome To The Johnsons — 123 Rivington St, New York, NY 10002, USA
+OK   Happy Ending (302 Broome St, Lower East Side) → Maybe Happy Ending Broadway — 111 W 44th St, New York, NY 10036, USA
+OK   Le Turtle (177 Chrystie St, Lower East Side) → Le Turtle — 177 Chrystie St, New York, NY 10002, USA
+OK   Employees Only (510 Hudson St, West Village) → Employees Only — 510 Hudson St, New York, NY 10014, USA
+OK   Buvette (42 Grove St, West Village) → Buvette — 42 Grove St, New York, NY 10014, USA
+OK   Little Branch (20 7th Ave S, West Village) → Little Branch — 20 7th Ave S, New York, NY 10014, USA
+OK   White Horse Tavern (567 Hudson St, West Village) → White Horse Tavern — 567 Hudson St, New York, NY 10014, USA
+OK   Village Vanguard (178 7th Ave S, West Village) → Village Vanguard — 178 7th Ave S, New York, NY 10014, USA
+OK   Fedora (239 W 4th St, West Village) → Fedora — 239 W 4th St, New York, NY 10014, USA
+OK   The Half King (505 W 23rd St, West Village) → The Half King — 505 W 23rd St A, New York, NY 10011, USA
+SKIP Mother of Pearl (95 Greenwich Ave, West Village) → Perle Cocktail and Raw Bar — 22 Greenwich Ave, New York, NY 10011, USA
+OK   Maison Premiere (298 Bedford Ave, Williamsburg) → Maison Premiere — 298 Bedford Ave, Brooklyn, NY 11249, USA
+OK   Ides Bar (80 Wythe Ave, Williamsburg) → Wythe Hotel — 80 Wythe Ave, Brooklyn, NY 11249, USA
+OK   Hotel Delmano (82 Berry St, Williamsburg) → Hotel Delmano — 82 Berry St, Brooklyn, NY 11211, USA
+OK   The William Vale (111 N 12th St, Williamsburg) → The William Vale — 111 N 12th St, Brooklyn, NY 11249, USA
+OK   Marlow & Sons (81 Broadway, Williamsburg) → Marlow & Sons — 81 Broadway, Brooklyn, NY 11249, USA
+SKIP Nights & Weekends (197 Grand St, Williamsburg) → Weekends Cafe — 155 S 4th St, Brooklyn, NY 11211, USA
+OK   St. Anselm (355 Metropolitan Ave, Williamsburg) → St. Anselm — 355 Metropolitan Ave, Brooklyn, NY 11211, USA
+OK   Pearl's Social and Billy Club (40 Saint Nicholas Ave, Williamsburg) → Pearl's Social & Billy Club — 40 St Nicholas Ave, Brooklyn, NY 11237, USA
+OK   Reynard (80 Wythe Ave, Williamsburg) → Reynard — 80 Wythe Ave, Brooklyn, NY 11249, USA
+OK   Clover Club (210 Smith St, Cobble Hill) → Clover Club — 210 Smith St, Brooklyn, NY 11201, USA
+OK   Frankies 457 (457 Court St, Carroll Gardens) → Frankies 457 Spuntino — 457 Court St, Brooklyn, NY 11231, USA
+OK   June Wine Bar (231 Court St, Cobble Hill) → June — 231 Court St, Brooklyn, NY 11201, USA
+OK   Butter & Scotch (818 Franklin Ave, Crown Heights) → Butter & Scotch — 53 Rockaway Ave, Brooklyn, NY 11233, USA
+OK   Berg'n (899 Bergen St, Crown Heights) → BERG'N — 899 Bergen St, Brooklyn, NY 11238, USA
+SKIP Hinterlands (469 Atlantic Ave, Downtown Brooklyn) → Hollow Nickel — 494 Atlantic Ave, Brooklyn, NY 11217, USA
+SKIP The Osprey (333 Adams St, Downtown Brooklyn) → New York Marriott at the Brooklyn Bridge — 333 Adams St, Brooklyn, NY 11201, USA
+OK   Grand Army (336 State St, Downtown Brooklyn) → Grand Army — 336 State St, Brooklyn, NY 11217, USA
+OK   Colonie (127 Atlantic Ave, Brooklyn Heights) → Colonie — 127 Atlantic Ave, Brooklyn, NY 11201, USA
+OK   Popina (127 Columbia St, Columbia Street Waterfront) → Popina — 127 Columbia St, Brooklyn, NY 11231, USA
+OK   The Back Room (102 Norfolk St) → The Back Room — 102 Norfolk St, New York, NY 10002, USA
+OK   Double Chicken Please (115 Allen St) → Double Chicken Please — 115 Allen St, New York, NY 10002, USA
+OK   Parcelle (135 Delancey St) → Parcelle Chinatown — 135 Division St, New York, NY 10002, USA
+OK   Mehanata (113 Ludlow St) → Mehanata Bulgarian Bar — 113 Ludlow St, New York, NY 10002, USA
+OK   Pianos (158 Ludlow St) → Pianos — 158 Ludlow St, New York, NY 10002, USA
+OK   Forgtmenot (138 Division St) → Forgtmenot — 138 Division St, New York, NY 10002, USA
+OK   The Flower Shop (107 Eldridge St) → The Flower Shop — 107 Eldridge St, New York, NY 10002, USA
+OK   Bar Revival (129 Division St) → Bar Revival — 161 Ludlow St, New York, NY 10002, USA
+OK   Death & Co (433 E 6th St) → Death & Co East Village — 433 E 6th St, New York, NY 10009, USA
+OK   PDT (113 St Marks Pl) → Please Don't Tell — 113 St Marks Pl, New York, NY 10009, USA
+OK   Amor y Amargo (443 E 6th St) → Amor y Amargo — 443 E 6th St, New York, NY 10009, USA
+OK   The Wayland (700 E 9th St) → The Wayland — 700 E 9th St, New York, NY 10009, USA
+OK   Niagara (112 Avenue A) → Niagara — 112 Avenue A, New York, NY 10009, USA
+OK   Angel's Share (45 Grove St) → Angel’s Share — 45 Grove St, New York, NY 10014, USA
+OK   Porchlight (271 11th Ave) → Porchlight — 271 11th Ave, New York, NY 10001, USA
+OK   Employees Only (510 Hudson St) → Employees Only — 510 Hudson St, New York, NY 10014, USA
+OK   Dante (79-81 MacDougal St) → Dante NYC — 79-81 MacDougal St, New York, NY 10012, USA
+OK   Chumley's (86 Bedford St) → The Eighty Six — 86 Bedford St, New York, NY 10014, USA
+OK   Buvette (42 Grove St) → Buvette — 42 Grove St, New York, NY 10014, USA
+OK   The Happiest Hour (121 W 10th St) → The Happiest Hour — 121 W 10th St, New York, NY 10011, USA
+OK   Bar Sardine (183 W 10th St) → Bar Sardine — 183 W 10th St, New York, NY 10014, USA
+OK   Analogue (19 W 8th St) → Analogue — 19 W 8th St, New York, NY 10011, USA
+OK   Balthazar (80 Spring St) → Balthazar — 80 Spring St, New York, NY 10012, USA
+OK   Spring Lounge (48 Spring St) → Spring Lounge — 48 Spring St, New York, NY 10012, USA
+SKIP Pegu Club (77 W Houston St) → Ayah Restaurant — 77 W Houston St, New York, NY 10012, USA
+SKIP Nolita House (47 E Houston St) → Estela — 47 E Houston St 1st floor, New York, NY 10012, USA
+OK   Fanelli Cafe (94 Prince St) → Fanelli Café — 94 Prince St, New York, NY 10012, USA
+OK   The Tippler (425 W 15th St) → The Tippler — 425 W 15th St, New York, NY 10011, USA
+OK   230 Fifth (230 5th Ave) → 230 Fifth Rooftop Bar — 1150 Broadway, New York, NY 10001, USA
+OK   Bathtub Gin (132 9th Ave) → Bathtub Gin — 132 9th Ave, New York, NY 10011, USA
+OK   Fig 19 (131 Chrystie St) → Fig. 19 — 131 Chrystie St, New York, NY 10002, USA
+OK   Bemelmans Bar (35 E 76th St) → Bemelmans Bar — 35 E 76th St, New York, NY 10021, USA
+OK   The Campbell (15 Vanderbilt Ave) → The Campbell — 15 Vanderbilt Ave, New York, NY 10017, USA
+OK   Flatiron Lounge (37 W 19th St) → Flatiron Lounge — 37 W 19th St #4200, New York, NY 10011, USA
+OK   The Rum House (228 W 47th St) → The Rum House — 228 W 47th St, New York, NY 10036, USA
+OK   Café Carlyle (35 E 76th St) → Café Carlyle — 35 E 76th St, New York, NY 10075, USA
+OK   The Dead Poet (450 Amsterdam Ave) → The Dead Poet — 450 Amsterdam Ave #2, New York, NY 10024, USA
+OK   Aubergine (1213 Lexington Ave) → Aubergine Cafe — 49-22 Skillman Ave, Woodside, NY 11377, USA
+OK   Sylvia's (328 Malcolm X Blvd) → Sylvia's Restaurant — 328 Malcolm X Blvd, New York, NY 10027, USA
+OK   67 Orange Street (2082 Frederick Douglass Blvd) → 67 Orange Street — 2082 Frederick Douglass Blvd, New York, NY 10026, USA
+OK   Shrine (2271 Adam Clayton Powell Jr Blvd) → Shrine — 2271 Adam Clayton Powell Jr Blvd, New York, NY 10030, USA
+OK   Vinatería (2211 Frederick Douglass Blvd) → Vinatería — 2211 Frederick Douglass Blvd, New York, NY 10026, USA
+OK   Laser Wolf (97 Wythe Ave) → Laser Wolf Brooklyn — 97 Wythe Ave, Brooklyn, NY 11249, USA
+OK   Baby's All Right (146 Broadway) → Baby's All Right — 146 Broadway, Brooklyn, NY 11211, USA
+OK   Hotel Delmano (82 Berry St) → Hotel Delmano — 82 Berry St, Brooklyn, NY 11211, USA
+OK   Maison Premiere (298 Bedford Ave) → Maison Premiere — 298 Bedford Ave, Brooklyn, NY 11249, USA
+OK   Donna (27 Broadway) → Donna — 7 Cornelia St, New York, NY 10014, USA
+SKIP Kinfolk (94 Wythe Ave) → Desert 5 Spot — 94 Wythe Ave, Brooklyn, NY 11249, USA
+OK   House of Yes (2 Wyckoff Ave) → House of Yes — 2 Wyckoff Ave, Brooklyn, NY 11237, USA
+OK   Nowadays (56-06 Cooper Ave) → Nowadays — 56-06 Cooper Ave, Glendale, NY 11385, USA
+OK   Jupiter Disco (1237 Flushing Ave) → Jupiter Disco — 1237 Flushing Ave, Brooklyn, NY 11237, USA
+OK   The Johnsons (369 Troutman St) → The Johnson's — 369 Troutman St, Brooklyn, NY 11237, USA
+OK   Birdy's (474 Wyckoff Ave) → Birdy's — 1215 Myrtle Ave, Brooklyn, NY 11221, USA
+OK   Archestratus (160 Huron St) → Archestratus Books + Foods — 164 Huron St, Brooklyn, NY 11222, USA
+OK   The Diamond (43 Franklin St) → Diamond Lil — 179 Nassau Ave, Brooklyn, NY 11222, USA
+SKIP Paulie Gee's (60 Greenpoint Ave) → Me and Paul’s — 60 Greenpoint Ave, Brooklyn, NY 11222, USA
+OK   Brouwerij Lane (78 Greenpoint Ave) → Brouwerij Lane — 78 Greenpoint Ave, Brooklyn, NY 11222, USA
+OK   Butter & Scotch (818 Franklin Ave) → Butter & Scotch — 53 Rockaway Ave, Brooklyn, NY 11233, USA
+OK   Friends and Lovers (641 Classon Ave) → Friends and Lovers — 641 Classon Ave, Brooklyn, NY 11238, USA
+OK   Barbès (376 9th St) → Barbès — 376 9th St, Brooklyn, NY 11215, USA
+OK   Playground (1234 Bedford Ave) → Playground — 1114 Bedford Ave, Brooklyn, NY 11216, USA
+OK   Public Records (233 Butler St) → Public Records — 233 Butler St, Brooklyn, NY 11217, USA
+OK   Threes Brewing (333 Douglass St) → Threes Brewing — 333 Douglass St, Brooklyn, NY 11217, USA
+OK   Freddy's Bar (627 5th Ave) → Freddy's Bar — 627 5th Ave, Brooklyn, NY 11215, USA
+OK   4th Ave Pub (76 4th Ave) → Fourth Avenue Pub — 76 4th Ave, Brooklyn, NY 11217, USA
+OK   The Astor Room (34-12 36th St) → Kaufman Astoria Studios — 34-12 36th St, Astoria, NY 11106, USA
+OK   Sweet Afton (30-09 34th St) → Sweet Afton — 30-09 34th St, Astoria, NY 11103, USA
+OK   Dominie's Astoria (34-07 30th Ave) → Dominie's — 34-07 30th Ave., Astoria, NY 11103, USA
+OK   Dutch Kills (27-24 Jackson Ave) → Dutch Kills — 27-24 Jackson Ave, Long Island City, NY 11101, USA

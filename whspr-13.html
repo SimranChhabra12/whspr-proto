@@ -28,6 +28,7 @@ body{background:#07060e;display:flex;justify-content:center;align-items:center;m
 <body>
 <div id="root"></div>
 <script src="data.js"></script>
+<script src="photos.js"></script>
 <script type="text/babel">
 const {useState,useEffect,useRef} = React;
 
@@ -258,12 +259,6 @@ const Home = ({onSelect, onSearch}) => {
     let h = 0; for (let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) >>> 0;
     return palette[h % palette.length];
   };
-  const Thumb = ({name}) => (
-    <div style={{width:48,height:48,borderRadius:10,background:thumbColor(name),flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,fontFamily:S.serif,fontSize:18,color:S.white,letterSpacing:"-0.02em"}}>
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-
   return (
     <div style={{flex:1,overflowY:"auto",background:S.black}}>
       {/* Top bar */}
@@ -294,7 +289,7 @@ const Home = ({onSelect, onSearch}) => {
             style={{background:S.g1,borderRadius:12,padding:"14px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"flex-start",transition:"background 0.15s"}}
             onMouseEnter={e=>e.currentTarget.style.background=S.g2}
             onMouseLeave={e=>e.currentTarget.style.background=S.g1}>
-            <Thumb name={p.name}/>
+            <VenueThumb p={p} style={{marginRight:12}}/>
             <div style={{flex:1,paddingRight:10}}>
               <div style={{fontSize:15,fontWeight:700,marginBottom:3,color:S.white}}>{p.name}</div>
               <div style={{fontSize:12,color:S.g3}}>{p.address?p.address.split(",")[0]:""} · {p.neighbourhood}</div>
@@ -339,6 +334,21 @@ const thumbColorOf = (name) => {
   const palette = ["#3a2d4a","#2d3a4a","#4a3a2d","#2d4a3a","#4a2d3a","#3a4a2d","#5c3a4a","#3a5c4a"];
   let h = 0; for (let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) >>> 0;
   return palette[h % palette.length];
+};
+
+// Venue photo from Google Places (ids in photos.js); falls back to the letter tile
+const placePhotoUrl = (id) => {
+  const ref = typeof PLACE_PHOTOS!=="undefined" && PLACE_PHOTOS[id];
+  return ref ? `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=192&key=${GOOGLE_KEY}` : null;
+};
+
+const VenueThumb = ({p, style}) => {
+  const [failed,setFailed] = useState(false);
+  const src = !failed && placePhotoUrl(p.id);
+  const box = {width:48,height:48,borderRadius:10,background:thumbColorOf(p.name),flexShrink:0,...style};
+  return src
+    ? <img src={src} alt="" loading="lazy" onError={()=>setFailed(true)} style={{...box,objectFit:"cover",display:"block"}}/>
+    : <div style={{...box,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:S.serif,fontSize:18,color:S.white,letterSpacing:"-0.02em"}}>{p.name.charAt(0).toUpperCase()}</div>;
 };
 
 const SearchResults = ({onBack, onSelect, initialQuery=""}) => {
@@ -422,7 +432,7 @@ const SearchResults = ({onBack, onSelect, initialQuery=""}) => {
         {results.map(p=>(
           <div key={p.id} onClick={()=>onSelect(p)}
             style={{background:S.g1,borderRadius:12,padding:"12px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:48,height:48,borderRadius:10,background:thumbColorOf(p.name),flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:S.serif,fontSize:18,color:S.white}}>{p.name.charAt(0).toUpperCase()}</div>
+            <VenueThumb p={p}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:14,fontWeight:700,color:S.white,marginBottom:2}}>{p.name}</div>
               <div style={{fontSize:11,color:S.g3,marginBottom:6}}>{p.address?p.address.split(",")[0]:""} · {p.neighbourhood}</div>
@@ -848,7 +858,7 @@ const SavedPlaces = ({savedIds, onSelect, onBack, onToggleSave}) => {
           </div>
         ) : saved.map(p=>(
           <div key={p.id} onClick={()=>onSelect(p)} style={{background:S.g1,borderRadius:12,padding:"12px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:48,height:48,borderRadius:10,background:thumbColorOf(p.name),flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:S.serif,fontSize:18,color:S.white}}>{p.name.charAt(0).toUpperCase()}</div>
+            <VenueThumb p={p}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:14,fontWeight:700,color:S.white,marginBottom:2}}>{p.name}</div>
               <div style={{fontSize:11,color:S.g3}}>{p.address?p.address.split(",")[0]:""} · {p.neighbourhood}</div>
