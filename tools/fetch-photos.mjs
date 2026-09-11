@@ -2,14 +2,14 @@
 //
 //   node tools/fetch-photos.mjs
 //
-// Uses the GOOGLE_KEY already in whspr-13.html (override with GOOGLE_MAPS_API_KEY).
+// Uses the GOOGLE_KEY already in index.html (override with GOOGLE_MAPS_API_KEY).
 // Also writes tools/photo-matches.txt so wrong matches can be spotted.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import vm from "node:vm";
 
 const root = new URL("..", import.meta.url);
-const html = readFileSync(new URL("whspr-13.html", root), "utf8");
+const html = readFileSync(new URL("index.html", root), "utf8");
 const key = process.env.GOOGLE_MAPS_API_KEY || html.match(/const GOOGLE_KEY = "([^"]+)"/)?.[1];
 if (!key) { console.error("No API key found"); process.exit(1); }
 
